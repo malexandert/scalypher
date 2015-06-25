@@ -22,11 +22,11 @@ Scalypher is designed to look similar to Cypher queries:
 val startNode = AnyNode()
 
 val cypher = startNode --> AnyNode() where (
-		startNode.property("thing") <> "something"
-	) returns startNode
+    startNode.property("name") <> "matt"
+  ) returns startNode
 
 cypher.toQuery
-// returns: 'MATCH (a1)-->() WHERE a1.thing <> "something" RETURN a1'
+// returns: 'MATCH (a1)-->() WHERE a1.name <> "matt" RETURN a1'
 ```
 
 The main thing to note is that, if you would like to specify a node or relationship in a `WHERE` or
@@ -39,8 +39,8 @@ If you'd like to reference the path from your `MATCH` expression in your `WHERE`
 
 ```scala
 val cypher = startNode --> AnyNode() where { path =>
-		...
-	} returns startNode
+    ...
+  } returns startNode
 
 ```
 
@@ -50,13 +50,92 @@ When building out your persistence layer, it is likely you will need to know the
 RETURN expressions. This can be obtained with:
 
 ```scala
-query.getReturnColumns
+cypher.getReturnColumns
 ```
 
 Note that when your query's action is `DELETE`, there are no return columns, and when it is `RETURN *`,
 you'll get back an identifier for each node, relationship, and one identifier for the path.
 
-### Passing In Custom Types
+#### Aliasing
+
+Objects pass to your return clauses can be aliased to any name you want. For example
+
+```scala
+val cypher = startNode --> AnyNode() where (
+    startNode.property("name") <> "matt"
+  ) returns (startNode as "startNode", startNode.property("name") as "name")
+
+cypher.getReturnColumnes
+// returns: Set("startNode", "name")
+```
+
+## Where Clauses
+
+Simple conditions in Scalypher can be created using references to nodes, relationships, and paths combined
+with the operators found in Cypher (with the exception of *equals*, which uses `===` to avoid a global Scala
+implicit and confusion with assignment).
+
+```scala
+val node = AnyNode()
+
+===
+<>
+>
+<
+>=
+<=
+in
+```
+
+### Properties
+
+Properties of a node can be checked against other properties or values
+
+```scala
+val cypher = startNode where (startNode.property("name") === "matt") returns startNode
+
+cypher.toQuery
+// returns: 'MATCH (a1) WHERE a1.name = "matt" RETURN a1'
+
+### Predicates
+
+Predicates are used to assert conditions on a collection of elements. You can create predicate
+conditions in your query like this
+
+```scala
+import com.originate.scalypher.where.PredicateCondition
+import com.originate.scalypher.where.All
+import com.originate.scalypher.where.Nodes
+
+val cypher = startNode -> AnyNode() where { path =>
+    PredicateCondition(
+      All,
+      Nodes(path),
+      (node => node.property("name") <> "matt")
+    )
+  } returns startNode
+
+cypher.toQuery
+// returns:
+```
+
+### Custom Expressions
+
+Since Scalypher doesn't cover the complete language, we have added a way to build custom expressions
+while maintaining the appropriate node/relationship/path identifiers.
+
+```scala
+import com.originate.scalypher.where.Expression
+
+val cypher = startNode -> endNode where (
+    Expression("id(?) <> ?", endNode, 10)
+  ) returns startNode
+
+cypher.toQuery
+// returns:
+```
+
+## Using Custom Types In Query Expressions
 
 Scalypher uses a `CypherExpressible` typeclass in order to allow extending the DSL to handle any type you
 want to pass to it. Here's an example of how you could use `org.joda.time.Instant` as a value reference
@@ -82,8 +161,8 @@ This can then be used in your code:
 import CypherExpressibles._
 
 val cypher = startNode --> AnyNode() where (
-		startNode.property("thing") === Instant.now
-	) returns startNode
+    startNode.property("createdAt") === Instant.now
+  ) returns startNode
 
 ```
 
